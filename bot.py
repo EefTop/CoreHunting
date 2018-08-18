@@ -18,12 +18,20 @@ auth_file = 'auth.json'
 settings = Settings()
 
 
-@client.command(name='req', help='Request a range of worlds to scout.', aliases=['request', 'scout'], pass_context=True)
-async def req(ctx, *args):
+@client.command(name='stats', help="shows the stats of all the scouts / callers, can tag someone to get spicific stats", aliases=['highscore'], pass_context=True)
+async def stats(ctx, *id):
+    channel = ctx.message.channel
+    if channel.name in settings.channels:
+        await analyzer.stats(channel, id)
+
+
+@client.command(name='scout', help='Request a range of worlds to scout.', aliases=['request', 'req'], pass_context=True)
+async def scout(ctx, *args):
     channel = ctx.message.channel
     if channel.name in settings.channels:
         username = ctx.message.author.name
-        await analyzer.get_scout_info(channel, username, args)
+        author = ctx.message.author
+        await analyzer.get_scout_info(channel, username, author, args)
 
 
 @client.command(name='relay', help="Relays the current world data", aliases=['worlds', 'list', 'calls'], pass_context=True)
@@ -33,7 +41,7 @@ async def relay(ctx):
         await analyzer.relay(channel)
 
 
-@client.command(name='reset', help='Refreshes current world data. If you are found abusing, you will be removed.',
+@client.command(name='reset', help='Refreshes current world data. If you are found abusing, you will be removed. Works only with Staff rank.',
                 aliases=['clear', 'erase', 'empty', 'wipe', 'destroy'], pass_context=True)
 @commands.has_any_role(*settings.ranks)
 async def reset(ctx):
@@ -71,7 +79,7 @@ async def stop(ctx):
     exit(0)
 
 
-@client.command(name='ping', pass_context=True)
+@client.command(name='ping', help='Checks bots ping.', pass_context=True)
 async def ping(ctx):
     d = datetime.utcnow() - ctx.message.timestamp
     s = d.seconds * 1000 + d.microseconds // 1000
@@ -82,15 +90,18 @@ async def ping(ctx):
 async def commands():
     await client.say("To add a world to queue: `w[#] [number of plinths]`.\n"
                      "Example: `w59 4` or `14 2.`\n"
-                     "**Note:** Only works in #calls channel.\n\n"
+                     "**Note:** Only works in # calls channel.\n\n"
                      "To declare a core: `w[#] [core name]`.\n"
                      "Example: `w12 cres` or `42 seren`.\n"
-                     "Aliases for core names are shown here: `['cres', 'c', 'sword', 'edicts', 'sw', 'juna', 'j', "
+                     "Aliases for core names are shown here: `['cres', 'c', 'sword', 'edicts', 'e', 'sw', 'juna', 'j', "
                      "'seren', 'se', 'aagi', 'a']`.\n "
-                     "**Note:** Only works in #calls channel.\n\n"
+                     "**Note:** Only works in # calls channel.\n\n"
                      "To delete a world from queue: `w[#] [0, d, dead, or gone]`.\n"
                      "Example: `w103 d` or `56 0`\n"
-                     "**Note:** Only works in #calls channel.\n\n"
+                     "**Note:** Only works in # calls channel.\n\n"
+                     "To get a list of worlds to scout: `?scout [optional amount]`.\n"
+                     "Example: `?scout` or `?scout 5`.\n"
+                     "**Note:** Only workds in # calls channel but you can reply the worlds in pm.\n\n"
                      "To get a list of current ranks in the friends chat: `?ranks`.\n"
                      "Example: `?ranks`\n"
                      "**Note:** Only works in #bots channel.\n\n"
@@ -138,7 +149,6 @@ async def on_ready():
 
     server = [x for x in client.servers if x.name == settings.servers[0]][0]
     bot_only_channel = [x for x in server.channels if x.name == settings.bot_only_channel][0]
-
     await analyzer.relay(bot_only_channel)
 
 
@@ -156,7 +166,13 @@ async def on_message(message):
         sys.exit(0)
 
     print("Received message {} in channel {} from {}".format(message.content, message.channel, message.author.name))
+
     # Check if we are in the right channel
+
+    if str(message.channel.type) == "private":
+        await analyzer.analyze_call(message)
+        return
+    
     if message.channel.name not in settings.channels:
         return
 
